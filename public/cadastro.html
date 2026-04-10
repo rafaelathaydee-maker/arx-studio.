@@ -10,6 +10,12 @@
 <style>
 :root{
   --glass: rgba(255,255,255,0.55);
+  --danger-bg: rgba(255, 74, 74, 0.12);
+  --danger-border: rgba(255, 74, 74, 0.3);
+  --danger-text: #a51d1d;
+  --success-bg: rgba(46, 204, 113, 0.12);
+  --success-border: rgba(46, 204, 113, 0.28);
+  --success-text: #156a39;
 }
 
 *{
@@ -30,7 +36,7 @@ body{
 
 .box{
   width:100%;
-  max-width:440px;
+  max-width:460px;
   padding:32px;
   border-radius:28px;
   background:var(--glass);
@@ -72,6 +78,11 @@ button{
   margin-top:4px;
 }
 
+button:disabled{
+  opacity:0.7;
+  cursor:not-allowed;
+}
+
 .back{
   display:block;
   text-align:center;
@@ -79,6 +90,29 @@ button{
   color:#111;
   text-decoration:none;
   opacity:0.75;
+}
+
+.message{
+  display:none;
+  margin-bottom:14px;
+  padding:14px 16px;
+  border-radius:16px;
+  font-size:14px;
+  line-height:1.5;
+}
+
+.message.error{
+  display:block;
+  background:var(--danger-bg);
+  border:1px solid var(--danger-border);
+  color:var(--danger-text);
+}
+
+.message.success{
+  display:block;
+  background:var(--success-bg);
+  border:1px solid var(--success-border);
+  color:var(--success-text);
 }
 </style>
 </head>
@@ -88,6 +122,8 @@ button{
 <div class="box">
   <h1>Criar conta</h1>
   <p class="sub">Preencha seus dados para contratar seu plano e acessar sua área de acompanhamento.</p>
+
+  <div id="message" class="message"></div>
 
   <input id="nome" placeholder="Seu nome">
   <input id="email" type="email" placeholder="Seu email">
@@ -100,7 +136,7 @@ button{
   </select>
   <input id="senha" type="password" placeholder="Crie uma senha">
 
-  <button onclick="criarConta()">Criar conta</button>
+  <button id="criarBtn" onclick="criarConta()">Criar conta</button>
 
   <a class="back" href="/">Voltar para página inicial</a>
 </div>
@@ -108,36 +144,68 @@ button{
 <script>
 const params = new URLSearchParams(window.location.search);
 const plano = params.get('plano');
-
-if(plano){
+if (plano) {
   document.getElementById('plano').value = plano;
 }
 
-async function criarConta(){
+function showMessage(text, type = 'error') {
+  const box = document.getElementById('message');
+  box.className = `message ${type}`;
+  box.textContent = text;
+}
+
+function clearMessage() {
+  const box = document.getElementById('message');
+  box.className = 'message';
+  box.textContent = '';
+}
+
+async function criarConta() {
+  clearMessage();
+
+  const btn = document.getElementById('criarBtn');
+  btn.disabled = true;
+  btn.textContent = 'Criando conta...';
+
   const nome = document.getElementById('nome').value.trim();
   const email = document.getElementById('email').value.trim();
   const whatsapp = document.getElementById('whatsapp').value.trim();
   const plano = document.getElementById('plano').value;
   const senha = document.getElementById('senha').value;
 
-  try{
-    const res = await fetch('/register',{
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+  if (!nome || !email || !whatsapp || !plano || !senha) {
+    showMessage('Preencha todos os campos.');
+    btn.disabled = false;
+    btn.textContent = 'Criar conta';
+    return;
+  }
+
+  try {
+    const res = await fetch('/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ nome, email, whatsapp, plano, senha })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
-    if(data.error){
-      alert(data.error);
+    if (!res.ok) {
+      showMessage(data.error || 'Não foi possível criar sua conta agora.');
+      btn.disabled = false;
+      btn.textContent = 'Criar conta';
       return;
     }
 
-    alert('Conta criada com sucesso.');
-    window.location.href = '/login.html';
-  }catch(err){
-    alert('Erro ao criar conta.');
+    showMessage('Conta criada com sucesso. Redirecionando para o login...', 'success');
+
+    setTimeout(() => {
+      window.location.href = '/login';
+    }, 1000);
+
+  } catch (err) {
+    showMessage('Erro de conexão. Tente novamente em instantes.');
+    btn.disabled = false;
+    btn.textContent = 'Criar conta';
   }
 }
 </script>

@@ -8,6 +8,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
 
 <style>
+:root{
+  --danger-bg: rgba(255, 74, 74, 0.12);
+  --danger-border: rgba(255, 74, 74, 0.3);
+  --danger-text: #a51d1d;
+}
+
 body{
   margin:0;
   min-height:100vh;
@@ -60,6 +66,11 @@ button{
   font-weight:600;
 }
 
+button:disabled{
+  opacity:0.7;
+  cursor:not-allowed;
+}
+
 .back{
   margin-top:12px;
   display:block;
@@ -67,6 +78,22 @@ button{
   text-decoration:none;
   color:#000;
   opacity:0.7;
+}
+
+.message{
+  display:none;
+  margin-bottom:14px;
+  padding:14px 16px;
+  border-radius:16px;
+  font-size:14px;
+  line-height:1.5;
+}
+
+.message.error{
+  display:block;
+  background:var(--danger-bg);
+  border:1px solid var(--danger-border);
+  color:var(--danger-text);
 }
 </style>
 </head>
@@ -77,6 +104,8 @@ button{
   <h1>Entrar</h1>
   <p>Acesse sua conta para acompanhar seu pedido.</p>
 
+  <div id="message" class="message"></div>
+
   <input id="email" type="email" placeholder="Email">
   <input id="senha" type="password" placeholder="Senha">
 
@@ -86,9 +115,34 @@ button{
 </div>
 
 <script>
+function showMessage(text) {
+  const box = document.getElementById('message');
+  box.className = 'message error';
+  box.textContent = text;
+}
+
+function clearMessage() {
+  const box = document.getElementById('message');
+  box.className = 'message';
+  box.textContent = '';
+}
+
 async function login() {
+  clearMessage();
+
+  const btn = document.getElementById('entrarBtn');
+  btn.disabled = true;
+  btn.textContent = 'Entrando...';
+
   const email = document.getElementById('email').value.trim();
   const senha = document.getElementById('senha').value;
+
+  if (!email || !senha) {
+    showMessage('Preencha email e senha.');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+    return;
+  }
 
   try {
     const res = await fetch('/login', {
@@ -97,10 +151,12 @@ async function login() {
       body: JSON.stringify({ email, senha })
     });
 
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
 
-    if (data.error) {
-      alert(data.error);
+    if (!res.ok) {
+      showMessage(data.error || 'Não foi possível entrar.');
+      btn.disabled = false;
+      btn.textContent = 'Entrar';
       return;
     }
 
@@ -121,10 +177,15 @@ async function login() {
       return;
     }
 
-    alert('Não foi possível entrar.');
+    showMessage('Resposta inválida do servidor.');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+
   } catch (error) {
     console.error(error);
-    alert('Erro ao entrar.');
+    showMessage('Erro de conexão. Tente novamente em instantes.');
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
   }
 }
 
