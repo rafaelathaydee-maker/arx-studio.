@@ -6,7 +6,6 @@ const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const nodemailer = require('nodemailer');
 const { MercadoPagoConfig, Payment } = require('mercadopago');
 
 const app = express();
@@ -67,11 +66,11 @@ function isValidPlano(plano) {
 }
 
 function isValidStatus(status) {
-  return ['Pedido novo', 'Recebido', 'Entregue'].includes(status);
+  return ['Pendente', 'Pedido enviado', 'Entregue'].includes(status);
 }
 
 function valorPlano(plano) {
-  if (plano === 'Starter') return 1;
+  if (plano === 'Starter') return 2;
   if (plano === 'Pro') return 197;
   if (plano === 'Elite') return 397;
   return 0;
@@ -97,18 +96,6 @@ const mpClient = new MercadoPagoConfig({
 
 const paymentClient = new Payment(mpClient);
 
-/* =========================
-   EMAIL
-========================= */
-const mailer = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-});
 
 /* =========================
    ROTAS FRONT
@@ -169,7 +156,7 @@ app.post('/register', async (req, res) => {
       whatsapp,
       plano,
       senha: senhaHash,
-      status: 'Pedido novo',
+      status: 'Pendente',
       pagamentoAprovado: false,
     });
 
@@ -316,7 +303,7 @@ app.patch('/clientes/:id/novo-pedido', async (req, res) => {
       req.params.id,
       {
         plano,
-        status: 'Pedido novo',
+        status: 'Pendente',
         pagamentoAprovado: false,
         ultimoPagamentoId: '',
       },
@@ -418,27 +405,11 @@ app.post('/webhooks/mercadopago', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    user.status = 'Recebido';
-    user.pagamentoAprovado = true;
-    user.ultimoPagamentoId = String(payment.id);
-    await user.save();
+  user.status = 'Pedido enviado';
+user.pagamentoAprovado = true;
+user.ultimoPagamentoId = String(payment.id);
+await user.save();
 
-    if (process.env.SMTP_USER && process.env.SMTP_PASS && process.env.NOTIFY_EMAIL) {
-      await mailer.sendMail({
-        from: process.env.SMTP_USER,
-        to: process.env.NOTIFY_EMAIL,
-        subject: `Pagamento aprovado - ${user.nome}`,
-        text:
-`Pagamento aprovado no ARX Studio.
-
-Cliente: ${user.nome}
-Email: ${user.email}
-WhatsApp: ${user.whatsapp}
-Plano: ${user.plano}
-Status atualizado para: ${user.status}
-ID do pagamento: ${payment.id}`
-      });
-    }
 
     return res.sendStatus(200);
   } catch (err) {

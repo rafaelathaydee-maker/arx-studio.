@@ -9,7 +9,7 @@ const UserSchema = new mongoose.Schema(
     senha: String,
     status: {
       type: String,
-      default: 'Pedido novo'
+      default: 'Pendente'
     },
     pagamentoAprovado: {
       type: Boolean,

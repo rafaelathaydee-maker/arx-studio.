@@ -340,7 +340,7 @@ app.innerHTML = `
 
     <div class="card">
       <h3>Status atual</h3>
-      <div class="big">${currentUser.status || 'Pedido novo'}</div>
+      <div class="big">${currentUser.status || 'Pendente'}</div>
     </div>
 
     <div class="card">
@@ -514,7 +514,7 @@ function showNewOrder(){
 }
 
 function renderAdminList(data, statusFiltro, activeTab) {
-  const filtrados = data.filter(c => (c.status || 'Pedido novo') === statusFiltro);
+  const filtrados = data.filter(c => (c.status || 'Pendente') === statusFiltro);
 
   const cardsHtml = filtrados.map((c) => {
     let valor = 0;
@@ -541,8 +541,8 @@ function renderAdminList(data, statusFiltro, activeTab) {
         </a>
 
         <div class="status-actions">
-          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Pedido novo', '${activeTab}')">Pedido novo</button>
-          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Recebido', '${activeTab}')">Recebido</button>
+          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Pendente', '${activeTab}')">Pendente</button>
+          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Pedido enviado', '${activeTab}')">Pedido enviado</button>
           <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Entregue', '${activeTab}')">Entregue</button>
         </div>
       </div>
@@ -552,7 +552,7 @@ function renderAdminList(data, statusFiltro, activeTab) {
   return cardsHtml || '<div class="card">Nenhum pedido nesta aba.</div>';
 }
 
-async function showAdmin(activeTab = 'Pedido novo'){
+async function showAdmin(activeTab = 'Pendente'){
   setActive('menuAdmin');
 
   try{
@@ -576,26 +576,26 @@ async function showAdmin(activeTab = 'Pedido novo'){
           <div class="big">${total}</div>
         </div>
 
+        
         <div class="card">
-          <h3>Pedido novo</h3>
-          <div class="big">${data.filter(c => (c.status || 'Pedido novo') === 'Pedido novo').length}</div>
-        </div>
+  <h3>Pendente</h3>
+  <div class="big">${data.filter(c => (c.status || 'Pendente') === 'Pendente').length}</div>
+</div>
 
-        <div class="card">
-          <h3>Recebido</h3>
-          <div class="big">${data.filter(c => c.status === 'Recebido').length}</div>
-        </div>
+<div class="card">
+  <h3>Pedido enviado</h3>
+  <div class="big">${data.filter(c => c.status === 'Pedido enviado').length}</div>
+</div>
 
-        <div class="card">
-          <h3>Entregue</h3>
-          <div class="big">${data.filter(c => c.status === 'Entregue').length}</div>
-        </div>
-      </div>
+<div class="card">
+  <h3>Entregue</h3>
+  <div class="big">${data.filter(c => c.status === 'Entregue').length}</div>
+</div>
 
       <div class="tabs">
-        <button class="tab-btn ${activeTab === 'Pedido novo' ? 'active' : ''}" onclick="showAdmin('Pedido novo')">Pedido novo</button>
-        <button class="tab-btn ${activeTab === 'Recebido' ? 'active' : ''}" onclick="showAdmin('Recebido')">Recebido</button>
-        <button class="tab-btn ${activeTab === 'Entregue' ? 'active' : ''}" onclick="showAdmin('Entregue')">Entregues</button>
+      <button class="tab-btn ${activeTab === 'Pendente' ? 'active' : ''}" onclick="showAdmin('Pendente')">Pendente</button>
+      <button class="tab-btn ${activeTab === 'Pedido enviado' ? 'active' : ''}" onclick="showAdmin('Pedido enviado')">Pedido enviado</button>
+      <button class="tab-btn ${activeTab === 'Entregue' ? 'active' : ''}" onclick="showAdmin('Entregue')">Entregues</button>
       </div>
 
       <div class="list">
@@ -679,7 +679,7 @@ document.getElementById('menuSupport').addEventListener('click', showSupport);
 document.getElementById('menuLogout').addEventListener('click', logout);
 
 if (admin) {
-  document.getElementById('menuAdmin').addEventListener('click', () => showAdmin('Pedido novo'));
+  document.getElementById('menuAdmin').addEventListener('click', () => showAdmin('Pendente'));
 } else {
   document.getElementById('menuNovoPedido').addEventListener('click', showNewOrder);
 }
