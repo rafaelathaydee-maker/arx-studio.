@@ -31,7 +31,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 ========================= */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 10,
+  limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Muitas tentativas. Tente novamente em alguns minutos.' },
@@ -64,6 +64,10 @@ function isValidPlano(plano) {
   return ['Starter', 'Pro', 'Elite'].includes(plano);
 }
 
+function isValidStatus(status) {
+  return ['Pedido novo', 'Recebido', 'Entregue'].includes(status);
+}
+
 /* =========================
    BANCO
 ========================= */
@@ -72,8 +76,7 @@ const User = require('./models/User');
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('🔥 Mongo conectado'))
   .catch((err) => {
-    console.error('❌ Erro Mongo');
-    console.error(err.message);
+    console.error('❌ Erro Mongo:', err.message);
   });
 
 /* =========================
@@ -124,7 +127,7 @@ app.post('/register', async (req, res) => {
 
     const existe = await User.findOne({ email });
     if (existe) {
-      return res.status(400).json({ error: 'Email já cadastrado.' });
+      return res.status(400).json({ error: 'Esse email já está cadastrado.' });
     }
 
     const senhaHash = await bcrypt.hash(senha, 12);
@@ -135,14 +138,15 @@ app.post('/register', async (req, res) => {
       whatsapp,
       plano,
       senha: senhaHash,
+      status: 'Pedido novo',
     });
 
     await user.save();
 
     return res.json({ ok: true });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Erro interno.' });
+    console.error('❌ Erro em /register:', err);
+    return res.status(500).json({ error: 'Erro interno no cadastro.' });
   }
 });
 
@@ -185,36 +189,82 @@ app.post('/login', async (req, res) => {
 
     return res.json({
       user: {
+        _id: user._id,
         nome: user.nome,
         email: user.email,
         whatsapp: user.whatsapp,
         plano: user.plano,
+        status: user.status,
       },
     });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: 'Erro interno.' });
+    console.error('❌ Erro em /login:', err);
+    return res.status(500).json({ error: 'Erro interno no login.' });
   }
 });
 
 /* =========================
-   CLIENTES (ADMIN)
+   CLIENTES
 ========================= */
 app.get('/clientes', async (req, res) => {
   try {
     const users = await User.find({}, { senha: 0 }).sort({ createdAt: -1, _id: -1 });
     return res.json(users);
   } catch (err) {
-    console.error(err);
+    console.error('❌ Erro em /clientes:', err);
     return res.status(500).json({ error: 'Erro ao buscar clientes.' });
   }
 });
 
 /* =========================
-   404 / ERRO
+   BUSCAR CLIENTE POR ID
+========================= */
+app.get('/clientes/:id', async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id, { senha: 0 });
+    if (!user) {
+      return res.status(404).json({ error: 'Cliente não encontrado.' });
+    }
+    return res.json(user);
+  } catch (err) {
+    console.error('❌ Erro em /clientes/:id:', err);
+    return res.status(500).json({ error: 'Erro ao buscar cliente.' });
+  }
+});
+
+/* =========================
+   ATUALIZAR STATUS
+========================= */
+app.patch('/clientes/:id/status', async (req, res) => {
+  try {
+    const status = sanitizeText(req.body.status);
+
+    if (!isValidStatus(status)) {
+      return res.status(400).json({ error: 'Status inválido.' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      { status },
+      { new: true, projection: { senha: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'Cliente não encontrado.' });
+    }
+
+    return res.json({ ok: true, user });
+  } catch (err) {
+    console.error('❌ Erro em PATCH /clientes/:id/status:', err);
+    return res.status(500).json({ error: 'Erro ao atualizar status.' });
+  }
+});
+
+/* =========================
+   404
 ========================= */
 app.use((req, res) => {
-  res.status(404).send('Página não encontrada.');
+  res.status(404).json({ error: 'Rota não encontrada.' });
 });
 
 const PORT = process.env.PORT || 3000;

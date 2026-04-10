@@ -190,6 +190,55 @@ body{
   color:var(--muted);
 }
 
+.obs-box{
+  margin-top:18px;
+  padding:18px;
+  border-radius:20px;
+  background:rgba(255,255,255,0.10);
+  border:1px solid rgba(255,255,255,0.12);
+  backdrop-filter:blur(20px);
+  color:var(--muted);
+  line-height:1.7;
+}
+
+.tabs{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top:20px;
+}
+
+.tab-btn{
+  padding:12px 16px;
+  border:none;
+  border-radius:16px;
+  background:rgba(255,255,255,0.08);
+  color:#fff;
+  cursor:pointer;
+  border:1px solid var(--stroke);
+}
+
+.tab-btn.active{
+  background:rgba(255,255,255,0.16);
+}
+
+.status-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:16px;
+}
+
+.status-btn{
+  padding:10px 14px;
+  border:none;
+  border-radius:14px;
+  cursor:pointer;
+  color:#fff;
+  background:rgba(255,255,255,0.1);
+  border:1px solid var(--stroke);
+}
+
 @media (max-width: 900px){
   .sidebar{
     position:static;
@@ -212,6 +261,7 @@ body{
 <div class="sidebar">
   <h2>ARX</h2>
   <div class="menu-item active" id="menuDashboard">Dashboard</div>
+  <div class="menu-item" id="menuNovoPedido" style="display:none;">Novo pedido</div>
   <div class="menu-item" id="menuAdmin" style="display:none;">Painel admin</div>
   <div class="menu-item" id="menuSupport">Suporte</div>
   <div class="menu-item" id="menuLogout">Sair</div>
@@ -232,6 +282,8 @@ if (!admin && !user) {
 
 if (admin) {
   document.getElementById('menuAdmin').style.display = 'block';
+} else {
+  document.getElementById('menuNovoPedido').style.display = 'block';
 }
 
 function setActive(menuId){
@@ -245,7 +297,20 @@ function whatsappLink(number, text){
   return `https://wa.me/55${clean}?text=${encodeURIComponent(text)}`;
 }
 
-function showDashboard(){
+async function refreshCurrentUser() {
+  if (!user || !user._id) return user;
+  try {
+    const res = await fetch(`/clientes/${user._id}`);
+    const data = await res.json();
+    if (!res.ok) return user;
+    localStorage.setItem('user', JSON.stringify(data));
+    return data;
+  } catch {
+    return user;
+  }
+}
+
+async function showDashboard(){
   setActive('menuDashboard');
 
   if (admin) {
@@ -285,18 +350,20 @@ function showDashboard(){
       <div class="block card">
         <h3>Resumo</h3>
         <div class="notice">
-          Use o painel admin para visualizar clientes, planos contratados e entrar em contato por WhatsApp com cada pedido.
+          Use o painel admin para organizar os pedidos em Pedido novo, Recebido e Entregue, e entrar em contato direto com cada cliente.
         </div>
       </div>
     `;
     return;
   }
 
+  const currentUser = await refreshCurrentUser();
+
   app.innerHTML = `
     <div class="header">
       <div>
-        <h1>Bem-vindo, ${user.nome}</h1>
-        <div class="sub">Seu pedido foi recebido e sua área já está ativa.</div>
+        <h1>Bem-vindo, ${currentUser.nome}</h1>
+        <div class="sub">Sua área já está ativa para acompanhamento.</div>
       </div>
       <button class="logout-btn" onclick="logout()">Sair</button>
     </div>
@@ -304,12 +371,12 @@ function showDashboard(){
     <div class="cards">
       <div class="card">
         <h3>Plano contratado</h3>
-        <div class="big">${user.plano}</div>
+        <div class="big">${currentUser.plano}</div>
       </div>
 
       <div class="card">
-        <h3>Status</h3>
-        <div class="big">Pedido recebido</div>
+        <h3>Status atual</h3>
+        <div class="big">${currentUser.status || 'Pedido novo'}</div>
       </div>
 
       <div class="card">
@@ -321,10 +388,15 @@ function showDashboard(){
     <div class="block card">
       <h3>Próximos passos</h3>
       <div class="notice">
-        Seu pedido foi registrado com sucesso. Você pode entrar em contato diretamente para alinhar detalhes do projeto, referências, objetivos e prazo.
+        Seu pedido foi registrado com sucesso. Você pode entrar em contato diretamente para alinhar referências, objetivos e detalhes do projeto.
       </div>
 
-      <a class="whatsapp-btn" target="_blank" href="${whatsappLink('11968304041', `Olá Rafael, sou ${user.nome} e contratei o plano ${user.plano}.`) }">
+      <div class="obs-box">
+        <strong>Observação importante</strong><br><br>
+        Ao enviar mensagem no WhatsApp, informe seu nome e o plano contratado para agilizar seu atendimento.
+      </div>
+
+      <a class="whatsapp-btn" target="_blank" href="${whatsappLink('11968304041', `Olá Rafael, meu nome é ${currentUser.nome} e contratei o plano ${currentUser.plano}.`) }">
         <span class="whatsapp-icon">W</span>
         Falar no WhatsApp
       </a>
@@ -332,48 +404,92 @@ function showDashboard(){
   `;
 }
 
-async function showAdmin(){
+function showNewOrder(){
+  setActive('menuNovoPedido');
+
+  const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+
+  app.innerHTML = `
+    <div class="header">
+      <div>
+        <h1>Novo pedido</h1>
+        <div class="sub">Canal direto para solicitar mais um projeto.</div>
+      </div>
+      <button class="logout-btn" onclick="logout()">Sair</button>
+    </div>
+
+    <div class="card">
+      <h3>Solicitar novo pedido</h3>
+      <div class="notice">
+        Para solicitar um novo pedido, entre em contato pelo WhatsApp e informe seu nome e o plano desejado.
+      </div>
+
+      <div class="obs-box">
+        <strong>Observação importante</strong><br><br>
+        Quando mandar mensagem, informe seu nome completo e o plano que deseja contratar. Isso acelera a identificação do seu pedido e o início do atendimento.
+      </div>
+
+      <a class="whatsapp-btn" target="_blank" href="${whatsappLink('11968304041', `Olá Rafael, meu nome é ${currentUser.nome} e quero fazer um novo pedido. Meu plano atual é ${currentUser.plano}.`) }">
+        <span class="whatsapp-icon">W</span>
+        Solicitar novo pedido
+      </a>
+    </div>
+  `;
+}
+
+function renderAdminList(data, statusFiltro, activeTab) {
+  const filtrados = data.filter(c => (c.status || 'Pedido novo') === statusFiltro);
+
+  const cardsHtml = filtrados.map((c) => {
+    let valor = 0;
+    if(c.plano === 'Starter') valor = 97;
+    if(c.plano === 'Pro') valor = 197;
+    if(c.plano === 'Elite') valor = 397;
+
+    const msg = `Olá ${c.nome}, aqui é Rafael da ARX Studio. Estou entrando em contato sobre seu pedido do plano ${c.plano}.`;
+
+    return `
+      <div class="client-card">
+        <h3>${c.nome}</h3>
+
+        <div class="client-meta">
+          <div><strong>Email:</strong><br>${c.email}</div>
+          <div><strong>WhatsApp:</strong><br>${c.whatsapp}</div>
+          <div><strong>Plano:</strong><br>${c.plano}</div>
+          <div><strong>Status:</strong><br>${c.status || 'Pedido novo'}</div>
+        </div>
+
+        <a class="whatsapp-btn" target="_blank" href="${whatsappLink(c.whatsapp, msg)}">
+          <span class="whatsapp-icon">W</span>
+          Chamar no WhatsApp
+        </a>
+
+        <div class="status-actions">
+          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Pedido novo', '${activeTab}')">Pedido novo</button>
+          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Recebido', '${activeTab}')">Recebido</button>
+          <button class="status-btn" onclick="atualizarStatus('${c._id}', 'Entregue', '${activeTab}')">Entregue</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return cardsHtml || '<div class="card">Nenhum pedido nesta aba.</div>';
+}
+
+async function showAdmin(activeTab = 'Pedido novo'){
   setActive('menuAdmin');
 
   try{
     const res = await fetch('/clientes');
     const data = await res.json();
 
-    let total = 0;
-
-    const cardsHtml = data.map((c) => {
-      let valor = 0;
-      if(c.plano === 'Starter') valor = 197;
-      if(c.plano === 'Pro') valor = 397;
-      if(c.plano === 'Elite') valor = 697;
-      total += valor;
-
-      const msg = `Olá ${c.nome}, aqui é Rafael da ARX Studio. Estou entrando em contato sobre seu pedido do plano ${c.plano}.`;
-
-      return `
-        <div class="client-card">
-          <h3>${c.nome}</h3>
-
-          <div class="client-meta">
-            <div><strong>Email:</strong><br>${c.email}</div>
-            <div><strong>WhatsApp:</strong><br>${c.whatsapp}</div>
-            <div><strong>Plano:</strong><br>${c.plano}</div>
-            <div><strong>Valor:</strong><br>R$ ${valor}</div>
-          </div>
-
-          <a class="whatsapp-btn" target="_blank" href="${whatsappLink(c.whatsapp, msg)}">
-            <span class="whatsapp-icon">W</span>
-            Chamar no WhatsApp
-          </a>
-        </div>
-      `;
-    }).join('');
+    const total = data.length;
 
     app.innerHTML = `
       <div class="header">
         <div>
           <h1>Painel admin</h1>
-          <div class="sub">Acompanhamento de clientes, planos e contato direto.</div>
+          <div class="sub">Controle de pedidos por status e contato direto.</div>
         </div>
         <button class="logout-btn" onclick="logout()">Sair</button>
       </div>
@@ -381,25 +497,59 @@ async function showAdmin(){
       <div class="cards">
         <div class="card">
           <h3>Total de clientes</h3>
-          <div class="big">${data.length}</div>
+          <div class="big">${total}</div>
         </div>
 
         <div class="card">
-          <h3>Faturamento estimado</h3>
-          <div class="big">R$ ${total}</div>
+          <h3>Pedido novo</h3>
+          <div class="big">${data.filter(c => (c.status || 'Pedido novo') === 'Pedido novo').length}</div>
         </div>
 
         <div class="card">
-          <h3>Status</h3>
-          <div class="big" style="font-size:18px;">Operação ativa</div>
+          <h3>Recebido</h3>
+          <div class="big">${data.filter(c => c.status === 'Recebido').length}</div>
+        </div>
+
+        <div class="card">
+          <h3>Entregue</h3>
+          <div class="big">${data.filter(c => c.status === 'Entregue').length}</div>
         </div>
       </div>
 
-      <div class="list">${cardsHtml || '<div class="card">Nenhum cliente cadastrado ainda.</div>'}</div>
+      <div class="tabs">
+        <button class="tab-btn ${activeTab === 'Pedido novo' ? 'active' : ''}" onclick="showAdmin('Pedido novo')">Pedido novo</button>
+        <button class="tab-btn ${activeTab === 'Recebido' ? 'active' : ''}" onclick="showAdmin('Recebido')">Recebido</button>
+        <button class="tab-btn ${activeTab === 'Entregue' ? 'active' : ''}" onclick="showAdmin('Entregue')">Entregues</button>
+      </div>
+
+      <div class="list">
+        ${renderAdminList(data, activeTab, activeTab)}
+      </div>
     `;
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="card">Erro ao carregar clientes.</div>`;
+  }
+}
+
+async function atualizarStatus(id, status, activeTab){
+  try{
+    const res = await fetch(`/clientes/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      alert(data.error || 'Erro ao atualizar status.');
+      return;
+    }
+
+    showAdmin(activeTab);
+  } catch(err){
+    alert('Erro ao atualizar status.');
   }
 }
 
@@ -411,7 +561,7 @@ function showSupport(){
   const plano = isAdmin ? 'Administrador' : user.plano;
   const msg = isAdmin
     ? 'Olá Rafael, estou na área administrativa da ARX.'
-    : `Olá Rafael, sou ${user.nome} e contratei o plano ${user.plano}.`;
+    : `Olá Rafael, meu nome é ${user.nome} e contratei o plano ${user.plano}.`;
 
   app.innerHTML = `
     <div class="header">
@@ -426,6 +576,11 @@ function showSupport(){
       <h3>Contato direto</h3>
       <div class="notice">
         ${nome}, você pode entrar em contato a qualquer momento para tratar de ajustes, referências, andamento do projeto e próximos passos do plano ${plano}.
+      </div>
+
+      <div class="obs-box">
+        <strong>Observação importante</strong><br><br>
+        Informe seu nome e seu plano ao mandar mensagem para agilizar seu atendimento.
       </div>
 
       <a class="whatsapp-btn" target="_blank" href="${whatsappLink('11968304041', msg)}">
@@ -448,7 +603,9 @@ document.getElementById('menuSupport').addEventListener('click', showSupport);
 document.getElementById('menuLogout').addEventListener('click', logout);
 
 if (admin) {
-  document.getElementById('menuAdmin').addEventListener('click', showAdmin);
+  document.getElementById('menuAdmin').addEventListener('click', () => showAdmin('Pedido novo'));
+} else {
+  document.getElementById('menuNovoPedido').addEventListener('click', showNewOrder);
 }
 
 showDashboard();
