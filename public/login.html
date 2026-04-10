@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login | ARX Studio</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+<style>
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:radial-gradient(circle,#ffffff,#eaeaea);
+  font-family:'Inter',sans-serif;
+  padding:20px;
+}
+
+.box{
+  width:100%;
+  max-width:400px;
+  padding:30px;
+  border-radius:25px;
+  background:rgba(255,255,255,0.62);
+  backdrop-filter:blur(20px);
+  box-shadow:0 20px 60px rgba(0,0,0,0.15);
+}
+
+h1{
+  margin-bottom:10px;
+}
+
+p{
+  opacity:0.7;
+  margin-bottom:18px;
+}
+
+input{
+  width:100%;
+  padding:14px;
+  border:none;
+  outline:none;
+  border-radius:15px;
+  margin-bottom:12px;
+  background:rgba(255,255,255,0.82);
+  box-sizing:border-box;
+}
+
+button{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:15px;
+  background:#000;
+  color:#fff;
+  cursor:pointer;
+  font-weight:600;
+}
+
+.back{
+  margin-top:12px;
+  display:block;
+  text-align:center;
+  text-decoration:none;
+  color:#000;
+  opacity:0.7;
+}
+</style>
+</head>
+
+<body>
+
+<div class="box">
+  <h1>Entrar</h1>
+  <p>Acesse sua conta para acompanhar seu pedido.</p>
+
+  <input id="email" type="email" placeholder="Email">
+  <input id="senha" type="password" placeholder="Senha">
+
+  <button id="entrarBtn">Entrar</button>
+
+  <a href="/" class="back">Voltar para página inicial</a>
+</div>
+
+<script>
+async function login() {
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha })
+    });
+
+    const data = await res.json();
+
+    if (data.error) {
+      alert(data.error);
+      return;
+    }
+
+    localStorage.removeItem('user');
+    localStorage.removeItem('admin');
+    localStorage.removeItem('adminUser');
+
+    if (data.admin) {
+      localStorage.setItem('admin', 'true');
+      localStorage.setItem('adminUser', JSON.stringify(data.adminUser));
+      window.location.href = '/dashboard';
+      return;
+    }
+
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+      window.location.href = '/dashboard';
+      return;
+    }
+
+    alert('Não foi possível entrar.');
+  } catch (error) {
+    console.error(error);
+    alert('Erro ao entrar.');
+  }
+}
+
+document.getElementById('entrarBtn').addEventListener('click', login);
+</script>
+
+</body>
+</html>

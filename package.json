@@ -1,0 +1,19 @@
+{
+  "name": "arx-full",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "express-rate-limit": "^8.3.2",
+    "helmet": "^8.1.0",
+    "mongodb": "^7.1.1",
+    "mongoose": "^7.8.9",
+    "nodemailer": "^6.9.0"
+  }
+}
