@@ -71,7 +71,7 @@ function isValidStatus(status) {
 }
 
 function valorPlano(plano) {
-  if (plano === 'Starter') return 97;
+  if (plano === 'Starter') return 1;
   if (plano === 'Pro') return 197;
   if (plano === 'Elite') return 397;
   return 0;
