@@ -7,11 +7,13 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const nodemailer = require('nodemailer');
-const MercadoPagoConfig = require('mercadopago').MercadoPagoConfig;
-const Payment = require('mercadopago').Payment;
+const { MercadoPagoConfig, Payment } = require('mercadopago');
 
 const app = express();
 
+/* =========================
+   CONFIG BASICA
+========================= */
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -26,6 +28,9 @@ app.use(express.json({ limit: '20kb' }));
 app.use(express.urlencoded({ extended: true, limit: '20kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+/* =========================
+   RATE LIMIT
+========================= */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -37,6 +42,9 @@ const authLimiter = rateLimit({
 app.use('/login', authLimiter);
 app.use('/register', authLimiter);
 
+/* =========================
+   HELPERS
+========================= */
 function sanitizeText(value) {
   if (typeof value !== 'string') return '';
   return value.trim().replace(/\s+/g, ' ').slice(0, 200);
@@ -58,6 +66,10 @@ function isValidPlano(plano) {
   return ['Starter', 'Pro', 'Elite'].includes(plano);
 }
 
+function isValidStatus(status) {
+  return ['Pedido novo', 'Recebido', 'Entregue'].includes(status);
+}
+
 function valorPlano(plano) {
   if (plano === 'Starter') return 197;
   if (plano === 'Pro') return 397;
@@ -65,6 +77,9 @@ function valorPlano(plano) {
   return 0;
 }
 
+/* =========================
+   BANCO
+========================= */
 const User = require('./models/User');
 
 mongoose.connect(process.env.MONGO_URI)
@@ -73,12 +88,18 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('❌ Erro Mongo:', err.message);
   });
 
+/* =========================
+   MERCADO PAGO
+========================= */
 const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
 });
 
 const paymentClient = new Payment(mpClient);
 
+/* =========================
+   EMAIL
+========================= */
 const mailer = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
@@ -89,6 +110,9 @@ const mailer = nodemailer.createTransport({
   },
 });
 
+/* =========================
+   ROTAS FRONT
+========================= */
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -105,6 +129,9 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cliente.html'));
 });
 
+/* =========================
+   CADASTRO
+========================= */
 app.post('/register', async (req, res) => {
   try {
     const nome = sanitizeText(req.body.nome);
@@ -143,6 +170,7 @@ app.post('/register', async (req, res) => {
       plano,
       senha: senhaHash,
       status: 'Pedido novo',
+      pagamentoAprovado: false,
     });
 
     await user.save();
@@ -154,6 +182,9 @@ app.post('/register', async (req, res) => {
   }
 });
 
+/* =========================
+   LOGIN
+========================= */
 app.post('/login', async (req, res) => {
   try {
     const email = sanitizeEmail(req.body.email);
@@ -196,6 +227,7 @@ app.post('/login', async (req, res) => {
         whatsapp: user.whatsapp,
         plano: user.plano,
         status: user.status,
+        pagamentoAprovado: !!user.pagamentoAprovado,
         ultimoPagamentoId: user.ultimoPagamentoId || null,
       },
     });
@@ -205,6 +237,9 @@ app.post('/login', async (req, res) => {
   }
 });
 
+/* =========================
+   LISTAR CLIENTES
+========================= */
 app.get('/clientes', async (req, res) => {
   try {
     const users = await User.find({}, { senha: 0 }).sort({ createdAt: -1, _id: -1 });
@@ -215,6 +250,9 @@ app.get('/clientes', async (req, res) => {
   }
 });
 
+/* =========================
+   BUSCAR CLIENTE
+========================= */
 app.get('/clientes/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id, { senha: 0 });
@@ -228,9 +266,81 @@ app.get('/clientes/:id', async (req, res) => {
   }
 });
 
+/* =========================
+   ATUALIZAR STATUS
+========================= */
+app.patch('/clientes/:id/status', async (req, res) => {
+  try {
+    const status = sanitizeText(req.body.status);
+
+    if (!isValidStatus(status)) {
+      return res.status(400).json({ error: 'Status inválido.' });
+    }
+
+    const update = { status };
+
+    if (status === 'Entregue') {
+      update.pagamentoAprovado = false;
+      update.ultimoPagamentoId = '';
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      update,
+      { new: true, projection: { senha: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'Cliente não encontrado.' });
+    }
+
+    return res.json({ ok: true, user });
+  } catch (err) {
+    console.error('❌ Erro em PATCH /clientes/:id/status:', err);
+    return res.status(500).json({ error: 'Erro ao atualizar status.' });
+  }
+});
+
+/* =========================
+   NOVO PEDIDO / TROCAR PLANO
+========================= */
+app.patch('/clientes/:id/novo-pedido', async (req, res) => {
+  try {
+    const plano = sanitizeText(req.body.plano);
+
+    if (!isValidPlano(plano)) {
+      return res.status(400).json({ error: 'Plano inválido.' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.params.id,
+      {
+        plano,
+        status: 'Pedido novo',
+        pagamentoAprovado: false,
+        ultimoPagamentoId: '',
+      },
+      { new: true, projection: { senha: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({ error: 'Cliente não encontrado.' });
+    }
+
+    return res.json({ ok: true, user });
+  } catch (err) {
+    console.error('❌ Erro em /novo-pedido:', err);
+    return res.status(500).json({ error: 'Erro ao criar novo pedido.' });
+  }
+});
+
+/* =========================
+   CRIAR PIX
+========================= */
 app.post('/pix/create', async (req, res) => {
   try {
     const userId = sanitizeText(req.body.userId);
+
     if (!userId) {
       return res.status(400).json({ error: 'Usuário inválido.' });
     }
@@ -238,6 +348,10 @@ app.post('/pix/create', async (req, res) => {
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'Cliente não encontrado.' });
+    }
+
+    if (user.pagamentoAprovado) {
+      return res.status(400).json({ error: 'Este pedido já foi pago.' });
     }
 
     const amount = valorPlano(user.plano);
@@ -264,7 +378,6 @@ app.post('/pix/create', async (req, res) => {
 
     return res.json({
       paymentId: result.id,
-      qrCode: result.point_of_interaction?.transaction_data?.qr_code || '',
       qrCodeBase64: result.point_of_interaction?.transaction_data?.qr_code_base64 || '',
       pixCopiaECola: result.point_of_interaction?.transaction_data?.qr_code || '',
       status: result.status,
@@ -275,6 +388,9 @@ app.post('/pix/create', async (req, res) => {
   }
 });
 
+/* =========================
+   WEBHOOK MERCADO PAGO
+========================= */
 app.post('/webhooks/mercadopago', async (req, res) => {
   try {
     const paymentId =
@@ -303,14 +419,16 @@ app.post('/webhooks/mercadopago', async (req, res) => {
     }
 
     user.status = 'Recebido';
+    user.pagamentoAprovado = true;
     user.ultimoPagamentoId = String(payment.id);
     await user.save();
 
-    await mailer.sendMail({
-      from: process.env.SMTP_USER,
-      to: process.env.NOTIFY_EMAIL,
-      subject: `Pagamento aprovado - ${user.nome}`,
-      text:
+    if (process.env.SMTP_USER && process.env.SMTP_PASS && process.env.NOTIFY_EMAIL) {
+      await mailer.sendMail({
+        from: process.env.SMTP_USER,
+        to: process.env.NOTIFY_EMAIL,
+        subject: `Pagamento aprovado - ${user.nome}`,
+        text:
 `Pagamento aprovado no ARX Studio.
 
 Cliente: ${user.nome}
@@ -319,7 +437,8 @@ WhatsApp: ${user.whatsapp}
 Plano: ${user.plano}
 Status atualizado para: ${user.status}
 ID do pagamento: ${payment.id}`
-    });
+      });
+    }
 
     return res.sendStatus(200);
   } catch (err) {
@@ -328,6 +447,9 @@ ID do pagamento: ${payment.id}`
   }
 });
 
+/* =========================
+   404
+========================= */
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });
 });

@@ -321,39 +321,68 @@ async function showDashboard(){
       plano: 'Administrador'
     };
 
-    app.innerHTML = `
-      <div class="header">
-        <div>
-          <h1>Bem-vindo, ${a.nome}</h1>
-          <div class="sub">Seu acesso administrativo está ativo.</div>
-        </div>
-        <button class="logout-btn" onclick="logout()">Sair</button>
+    const podePagar = !currentUser.pagamentoAprovado;
+
+app.innerHTML = `
+  <div class="header">
+    <div>
+      <h1>Bem-vindo, ${currentUser.nome}</h1>
+      <div class="sub">Sua área já está ativa para acompanhamento.</div>
+    </div>
+    <button class="logout-btn" onclick="logout()">Sair</button>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Plano contratado</h3>
+      <div class="big">${currentUser.plano}</div>
+    </div>
+
+    <div class="card">
+      <h3>Status atual</h3>
+      <div class="big">${currentUser.status || 'Pedido novo'}</div>
+    </div>
+
+    <div class="card">
+      <h3>Canal de contato</h3>
+      <div class="big" style="font-size:18px;">WhatsApp direto</div>
+    </div>
+  </div>
+
+  <div class="block card">
+    <h3>Próximos passos</h3>
+    <div class="notice">
+      Seu pedido foi registrado com sucesso. Você pode entrar em contato diretamente
+      para alinhar referências, objetivos e detalhes do projeto.
+    </div>
+
+    <div class="obs-box">
+      <strong>Observação importante</strong><br><br>
+      Ao enviar mensagem no WhatsApp, informe seu nome e o plano contratado para agilizar seu atendimento.
+    </div>
+
+    <a class="whatsapp-btn" target="_blank" href="${whatsappLink('11968304041', `Olá Rafael, meu nome é ${currentUser.nome} e contratei o plano ${currentUser.plano}.`) }">
+      <span class="whatsapp-icon">W</span>
+      Falar no WhatsApp
+    </a>
+  </div>
+
+  ${podePagar ? `
+    <div class="block card">
+      <h3>Pagamento via Pix</h3>
+      <div class="notice">
+        Gere o pagamento para iniciar seu projeto imediatamente.
       </div>
 
-      <div class="cards">
-        <div class="card">
-          <h3>Perfil</h3>
-          <div class="big">Administrador</div>
-        </div>
+      <button class="whatsapp-btn" onclick="gerarPix()">
+        <span class="whatsapp-icon">W</span>
+        Gerar Pix
+      </button>
 
-        <div class="card">
-          <h3>Email</h3>
-          <div class="big" style="font-size:18px;">${a.email}</div>
-        </div>
-
-        <div class="card">
-          <h3>Contato</h3>
-          <div class="big" style="font-size:18px;">${a.whatsapp}</div>
-        </div>
-      </div>
-
-      <div class="block card">
-        <h3>Resumo</h3>
-        <div class="notice">
-          Use o painel admin para organizar os pedidos em Pedido novo, Recebido e Entregue, e entrar em contato direto com cada cliente.
-        </div>
-      </div>
-    `;
+      <div id="pixArea" style="margin-top:20px;"></div>
+    </div>
+  ` : ''}
+`;
     return;
   }
 
@@ -422,30 +451,64 @@ function showNewOrder(){
 
   const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
 
+  if (!currentUser) {
+    app.innerHTML = `<div class="card">Usuário não encontrado.</div>`;
+    return;
+  }
+
+  if (currentUser.status !== 'Entregue') {
+    app.innerHTML = `
+      <div class="header">
+        <div>
+          <h1>Novo pedido</h1>
+          <div class="sub">Esta opção é liberada após a entrega do pedido atual.</div>
+        </div>
+        <button class="logout-btn" onclick="logout()">Sair</button>
+      </div>
+
+      <div class="card">
+        <h3>Pedido atual em andamento</h3>
+        <div class="notice">
+          Você poderá solicitar um novo pedido quando o status do seu pedido atual estiver como Entregue.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
   app.innerHTML = `
     <div class="header">
       <div>
         <h1>Novo pedido</h1>
-        <div class="sub">Canal direto para solicitar mais um projeto.</div>
+        <div class="sub">Escolha um novo plano para abrir outra cobrança.</div>
       </div>
       <button class="logout-btn" onclick="logout()">Sair</button>
     </div>
 
     <div class="card">
-      <h3>Solicitar novo pedido</h3>
+      <h3>Selecionar novo plano</h3>
+
       <div class="notice">
-        Para solicitar um novo pedido, entre em contato pelo WhatsApp e informe seu nome e o plano desejado.
+        Ao abrir um novo pedido, seu status volta para Pedido novo e um novo Pix poderá ser gerado.
       </div>
 
       <div class="obs-box">
         <strong>Observação importante</strong><br><br>
-        Quando mandar mensagem, informe seu nome completo e o plano que deseja contratar. Isso acelera a identificação do seu pedido e o início do atendimento.
+        Ao mandar mensagem no WhatsApp, informe seu nome e o plano escolhido para agilizar seu atendimento.
       </div>
 
-      <a class="whatsapp-btn" target="_blank" href="${whatsappLink('11968304041', `Olá Rafael, meu nome é ${currentUser.nome} e quero fazer um novo pedido. Meu plano atual é ${currentUser.plano}.`) }">
+      <div style="margin-top:18px;">
+        <select id="novoPlano" style="width:100%;padding:14px;border-radius:16px;border:none;">
+          <option value="Starter">Starter</option>
+          <option value="Pro">Pro</option>
+          <option value="Elite">Elite</option>
+        </select>
+      </div>
+
+      <button class="whatsapp-btn" style="margin-top:18px;" onclick="criarNovoPedido()">
         <span class="whatsapp-icon">W</span>
-        Solicitar novo pedido
-      </a>
+        Abrir novo pedido
+      </button>
     </div>
   `;
 }
@@ -653,6 +716,75 @@ async function gerarPix(){
     `;
   }catch(err){
     area.innerHTML = "Erro ao conectar com servidor";
+  }
+}
+async function gerarPix(){
+  const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+  const area = document.getElementById('pixArea');
+
+  if (!currentUser || !currentUser._id) {
+    if (area) area.innerHTML = 'Usuário inválido.';
+    return;
+  }
+
+  if (area) area.innerHTML = 'Gerando pagamento...';
+
+  try{
+    const res = await fetch('/pix/create', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ userId: currentUser._id })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      if (area) area.innerHTML = data.error || 'Erro ao gerar Pix.';
+      return;
+    }
+
+    if (area) {
+      area.innerHTML = `
+        <div class="card">
+          <h3>Escaneie o QR Code</h3>
+          <img src="data:image/png;base64,${data.qrCodeBase64}" style="width:220px;margin-top:10px;border-radius:16px;" />
+
+          <h3 style="margin-top:20px;">Ou copie o código Pix</h3>
+          <textarea style="width:100%;padding:12px;border-radius:14px;margin-top:10px;">${data.pixCopiaECola}</textarea>
+        </div>
+      `;
+    }
+  }catch(err){
+    if (area) area.innerHTML = 'Erro ao conectar com o servidor.';
+  }
+}
+async function criarNovoPedido(){
+  const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+  const plano = document.getElementById('novoPlano')?.value;
+
+  if (!currentUser || !currentUser._id || !plano) {
+    alert('Não foi possível criar o novo pedido.');
+    return;
+  }
+
+  try{
+    const res = await fetch(`/clientes/${currentUser._id}/novo-pedido`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ plano })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      alert(data.error || 'Erro ao criar novo pedido.');
+      return;
+    }
+
+    localStorage.setItem('user', JSON.stringify(data.user));
+    showDashboard();
+  }catch(err){
+    alert('Erro ao criar novo pedido.');
   }
 }
 </script>

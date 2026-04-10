@@ -11,7 +11,14 @@ const UserSchema = new mongoose.Schema(
       type: String,
       default: 'Pedido novo'
     },
-    ultimoPagamentoId: String
+    pagamentoAprovado: {
+      type: Boolean,
+      default: false
+    },
+    ultimoPagamentoId: {
+      type: String,
+      default: ''
+    }
   },
   { timestamps: true }
 );
