@@ -7,6 +7,10 @@ const UserSchema = new mongoose.Schema(
     whatsapp: String,
     plano: String,
     senha: String,
+    status: {
+      type: String,
+      default: 'Pedido novo'
+    }
   },
   { timestamps: true }
 );
