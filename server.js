@@ -6,12 +6,12 @@ const bcrypt = require('bcrypt');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const nodemailer = require('nodemailer');
+const MercadoPagoConfig = require('mercadopago').MercadoPagoConfig;
+const Payment = require('mercadopago').Payment;
 
 const app = express();
 
-/* =========================
-   CONFIG BASICA
-========================= */
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -26,9 +26,6 @@ app.use(express.json({ limit: '20kb' }));
 app.use(express.urlencoded({ extended: true, limit: '20kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* =========================
-   RATE LIMIT
-========================= */
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 20,
@@ -40,9 +37,6 @@ const authLimiter = rateLimit({
 app.use('/login', authLimiter);
 app.use('/register', authLimiter);
 
-/* =========================
-   HELPERS
-========================= */
 function sanitizeText(value) {
   if (typeof value !== 'string') return '';
   return value.trim().replace(/\s+/g, ' ').slice(0, 200);
@@ -64,13 +58,13 @@ function isValidPlano(plano) {
   return ['Starter', 'Pro', 'Elite'].includes(plano);
 }
 
-function isValidStatus(status) {
-  return ['Pedido novo', 'Recebido', 'Entregue'].includes(status);
+function valorPlano(plano) {
+  if (plano === 'Starter') return 197;
+  if (plano === 'Pro') return 397;
+  if (plano === 'Elite') return 697;
+  return 0;
 }
 
-/* =========================
-   BANCO
-========================= */
 const User = require('./models/User');
 
 mongoose.connect(process.env.MONGO_URI)
@@ -79,9 +73,22 @@ mongoose.connect(process.env.MONGO_URI)
     console.error('❌ Erro Mongo:', err.message);
   });
 
-/* =========================
-   ROTAS FRONT
-========================= */
+const mpClient = new MercadoPagoConfig({
+  accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN,
+});
+
+const paymentClient = new Payment(mpClient);
+
+const mailer = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: Number(process.env.SMTP_PORT || 587),
+  secure: false,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -98,9 +105,6 @@ app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'cliente.html'));
 });
 
-/* =========================
-   CADASTRO
-========================= */
 app.post('/register', async (req, res) => {
   try {
     const nome = sanitizeText(req.body.nome);
@@ -150,9 +154,6 @@ app.post('/register', async (req, res) => {
   }
 });
 
-/* =========================
-   LOGIN
-========================= */
 app.post('/login', async (req, res) => {
   try {
     const email = sanitizeEmail(req.body.email);
@@ -195,6 +196,7 @@ app.post('/login', async (req, res) => {
         whatsapp: user.whatsapp,
         plano: user.plano,
         status: user.status,
+        ultimoPagamentoId: user.ultimoPagamentoId || null,
       },
     });
   } catch (err) {
@@ -203,9 +205,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-/* =========================
-   CLIENTES
-========================= */
 app.get('/clientes', async (req, res) => {
   try {
     const users = await User.find({}, { senha: 0 }).sort({ createdAt: -1, _id: -1 });
@@ -216,9 +215,6 @@ app.get('/clientes', async (req, res) => {
   }
 });
 
-/* =========================
-   BUSCAR CLIENTE POR ID
-========================= */
 app.get('/clientes/:id', async (req, res) => {
   try {
     const user = await User.findById(req.params.id, { senha: 0 });
@@ -232,37 +228,106 @@ app.get('/clientes/:id', async (req, res) => {
   }
 });
 
-/* =========================
-   ATUALIZAR STATUS
-========================= */
-app.patch('/clientes/:id/status', async (req, res) => {
+app.post('/pix/create', async (req, res) => {
   try {
-    const status = sanitizeText(req.body.status);
-
-    if (!isValidStatus(status)) {
-      return res.status(400).json({ error: 'Status inválido.' });
+    const userId = sanitizeText(req.body.userId);
+    if (!userId) {
+      return res.status(400).json({ error: 'Usuário inválido.' });
     }
 
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true, projection: { senha: 0 } }
-    );
-
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'Cliente não encontrado.' });
     }
 
-    return res.json({ ok: true, user });
+    const amount = valorPlano(user.plano);
+    if (!amount) {
+      return res.status(400).json({ error: 'Plano inválido para cobrança.' });
+    }
+
+    const result = await paymentClient.create({
+      body: {
+        transaction_amount: amount,
+        description: `ARX Studio - Plano ${user.plano}`,
+        payment_method_id: 'pix',
+        payer: {
+          email: user.email,
+          first_name: user.nome,
+        },
+        notification_url: `${process.env.APP_BASE_URL}/webhooks/mercadopago`,
+        external_reference: String(user._id),
+      },
+    });
+
+    user.ultimoPagamentoId = String(result.id);
+    await user.save();
+
+    return res.json({
+      paymentId: result.id,
+      qrCode: result.point_of_interaction?.transaction_data?.qr_code || '',
+      qrCodeBase64: result.point_of_interaction?.transaction_data?.qr_code_base64 || '',
+      pixCopiaECola: result.point_of_interaction?.transaction_data?.qr_code || '',
+      status: result.status,
+    });
   } catch (err) {
-    console.error('❌ Erro em PATCH /clientes/:id/status:', err);
-    return res.status(500).json({ error: 'Erro ao atualizar status.' });
+    console.error('❌ Erro em /pix/create:', err);
+    return res.status(500).json({ error: 'Erro ao gerar pagamento Pix.' });
   }
 });
 
-/* =========================
-   404
-========================= */
+app.post('/webhooks/mercadopago', async (req, res) => {
+  try {
+    const paymentId =
+      req.body?.data?.id ||
+      req.query['data.id'] ||
+      req.query.id;
+
+    if (!paymentId) {
+      return res.sendStatus(200);
+    }
+
+    const payment = await paymentClient.get({ id: String(paymentId) });
+
+    if (payment.status !== 'approved') {
+      return res.sendStatus(200);
+    }
+
+    const userId = payment.external_reference;
+    if (!userId) {
+      return res.sendStatus(200);
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.sendStatus(200);
+    }
+
+    user.status = 'Recebido';
+    user.ultimoPagamentoId = String(payment.id);
+    await user.save();
+
+    await mailer.sendMail({
+      from: process.env.SMTP_USER,
+      to: process.env.NOTIFY_EMAIL,
+      subject: `Pagamento aprovado - ${user.nome}`,
+      text:
+`Pagamento aprovado no ARX Studio.
+
+Cliente: ${user.nome}
+Email: ${user.email}
+WhatsApp: ${user.whatsapp}
+Plano: ${user.plano}
+Status atualizado para: ${user.status}
+ID do pagamento: ${payment.id}`
+    });
+
+    return res.sendStatus(200);
+  } catch (err) {
+    console.error('❌ Erro em /webhooks/mercadopago:', err);
+    return res.sendStatus(200);
+  }
+});
+
 app.use((req, res) => {
   res.status(404).json({ error: 'Rota não encontrada.' });
 });

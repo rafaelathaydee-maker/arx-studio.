@@ -387,6 +387,19 @@ async function showDashboard(){
 
     <div class="block card">
       <h3>Próximos passos</h3>
+      <div class="block card">
+  <h3>Pagamento via Pix</h3>
+
+  <div class="notice">
+    Gere o pagamento para iniciar seu projeto imediatamente.
+  </div>
+
+  <button class="whatsapp-btn" onclick="gerarPix()">
+    Gerar Pix
+  </button>
+
+  <div id="pixArea" style="margin-top:20px;"></div>
+</div>
       <div class="notice">
         Seu pedido foi registrado com sucesso. Você pode entrar em contato diretamente para alinhar referências, objetivos e detalhes do projeto.
       </div>
@@ -609,6 +622,39 @@ if (admin) {
 }
 
 showDashboard();
+async function gerarPix(){
+  const user = JSON.parse(localStorage.getItem('user'));
+
+  const area = document.getElementById('pixArea');
+  area.innerHTML = "Gerando pagamento...";
+
+  try{
+    const res = await fetch('/pix/create', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ userId: user._id })
+    });
+
+    const data = await res.json();
+
+    if(!res.ok){
+      area.innerHTML = "Erro ao gerar Pix";
+      return;
+    }
+
+    area.innerHTML = `
+      <div class="card">
+        <h3>Escaneie o QR Code</h3>
+        <img src="data:image/png;base64,${data.qrCodeBase64}" style="width:220px;margin-top:10px;"/>
+
+        <h3 style="margin-top:20px;">Ou copie o código Pix</h3>
+        <textarea style="width:100%;padding:10px;border-radius:10px;">${data.pixCopiaECola}</textarea>
+      </div>
+    `;
+  }catch(err){
+    area.innerHTML = "Erro ao conectar com servidor";
+  }
+}
 </script>
 
 </body>

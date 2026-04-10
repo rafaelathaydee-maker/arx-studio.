@@ -10,7 +10,8 @@ const UserSchema = new mongoose.Schema(
     status: {
       type: String,
       default: 'Pedido novo'
-    }
+    },
+    ultimoPagamentoId: String
   },
   { timestamps: true }
 );
